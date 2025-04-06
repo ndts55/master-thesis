@@ -1,12 +1,123 @@
 \chapter{Introduction}
-Introduction – Why was the study undertaken? What was the research question, the tested hypothesis or the purpose of the research?
+Introduction - Why was the study undertaken? What was the research question, the tested hypothesis or the purpose of the research?
 This chapter introduces the evaluation and optimization of the CUDAjectory v2 Performance Architecture.
 
-% TODO: Write an overview of what we are doing and what we hope to achieve
-% TODO: Introduce CUDA / MPP - What is it? What does it do?
-% TODO: Introduce performance metrics - What are they? What do they tell us about the program? How do we collect them?
-% TODO: Introduce performance improvement techniques
-% TODO: Introduce CUDAjectory - What does it do and why? How does it do it and why?
-% TODO: Compare CUDAjectory performance with Godot performance to explain why CUDAjectory uses CUDA
-% TODO: Introduce what we're doing - What are we doing? Why are we doing it? What benefits do we think we'll gain after having done it?
+
+Overview of what we are doing and what we hope to achieve
+- Brief explanation of what CUDAjectory v2 does
+  - Rewrite of CUDAjectory
+  - Initially authored by GEDA as part of a masters thesis at the TU Delft
+  - Performs trajectory calculations
+    - Since we can't know the exact position of satellites, we use sample points taken from a volume around where the satellite is most likely to be
+      - TODO fact-check this statement, why do we take samples in a volume?
+    - Because the samples are independent of each other we can propagate each one in parallel
+    - Godot does this on the CPU
+    - CUDAjectory does this on the GPU
+    - We will introduce CUDAjectory v2 more in-depth later on
+- What are we doing?
+  - Analyzing the performance characteristics of the CUDAjectory v2
+    - Pinpoint performance bottlenecks / suboptimal program behavior
+      - By using profiling tools like NSight Compute / Systems
+    - Determine why these performance bottlenecks occur
+  - Improve performance of CUDAjectory v2 by fixing these performance bottlenecks
+  - To this end we start out by introducing CUDA / MPP / performance analysis concepts before analyzing CUDAjectory v2
+  - Then we walk through the changes made to the code and how they impacted performance
+  - Finally, we present how the overall performance compares to the initial codebase
+  - TODO Is there something else to discuss here?
+- What are we hoping to achieve?
+  - Improved performance of CUDAjectory v2 to enable larger-scale and faster trajectory computations
+- Why do we want to achieve it?
+  - CUDAjectory already represents a huge improvement in terms of speedup compared to traditional methods which use the CPU (Godot)
+  - CUDAjectory v2 also already surpasses the performance of its predecessor
+  - Our aim is to improve CUDAjectory v2 even further
+  - TODO does this actually answer WHY?
+
+- Introduce CUDA / MPP
+  - What is it?
+    - acronym Compute Unified Device Architecture
+    - CUDA is a general purpose parallel computing platform, providing hardware and software component that allow developers to write and execute highly parallelized applications
+    - general-purpose parallel computing platform
+      - hardware
+        - GPGPU (General Purpose Graphics Processing Unit) or more accurately MPP (Massively Parallel Processors)
+        - Unlike traditional CPUs, MPPs posses a larger number of less capable processing units that can execute code in parallel
+        - architecture of a GPU / an MPP
+          - CUDA Core: the fundamental unit of execution
+            - (executes one instance of a kernel function)
+            - can execute instructions
+              - instructions are issued to multiple cores simultaneously
+            - is also less powerful / capable than a typical modern CPU core
+            - only has little memory to itself (registers)
+            - in return there can be many more CUDA cores in a GPU / an MPP than CPU cores in a CPU
+            - NVIDIA H100 has 14,592 CUDA cores
+            - NVIDIA A100 has 6,912 CUDA cores
+            - CPUs can have up to 128 cores
+              - TODO find source for this claim, AMD EPYC processors fit here, those are used by the University of Barcelona
+          - Streaming Multiprocessors: CUDA cores are contained in Streaming Multiprocessors (SM)
+            - an MPP contains multiple SMs
+              - NVIDIA A100 has 108 SMs with 64 cores each
+                - source: PMPP ch. 4.1
+              - NVIDIA H100 has 144 SMs
+              - TODO find sources for these numbers
+            - each SM has on-chip memory
+              - fast but small
+            - each SM has many CUDA cores
+            - also has additional memory
+              - TODO check out PMPP ch. 5 for more information on what is meant by "Memory"
+            - control logic
+              - TODO find out more information about what is meant by "Control"
+          - Global Memory
+            - large but slow
+            - TODO what is contained in global memory?
+      - software
+        - Threads
+          - smallest union of execution in a CUDA program
+          - each thread executes a single instance of a kernel function
+          - each thread has a unique identifier within a block, given by threadIdx, which is a 3d index
+        - Blocks
+          - a group of threads that can cooperate with each other
+          - threads in a block access the same shared memory and can synchronize their execution
+          - blocks are independent of each other
+          - all blocks have the same dimensions
+          - each block has its own shared memory(, which is allocated on the on-chip memory of the executing SM)
+          - each block has a unique identifier within a grid, given by blockIdx, which is a 3d index
+        - Grids
+          - a collection of blocks
+          - provides the overall structure for organizing blocks
+        - Streams
+          - a queue of GPU operations that are executed in order
+          - multiple streams allow developers to schedule GPU operations concurrently
+          - streams are independent of each other, there is no implicit ordering between GPU operations on different streams
+        - Kernels
+          - Special functions executed on the device by n threads on n cores
+          - when launching a kernel the dimensions of the grid and the dimensions of all blocks in that grid have to be specified
+          - additionally the size of shared memory per block and the streamId can be specified
+  - What does it do?
+
+- Introduce performance metrics
+  - TODO What are they?
+  - TODO What do they tell us about the program?
+  - TODO How do we collect them?
+
+- TODO Keep a list of all the techniques that we use throughout the thesis
+
+- Introduce CUDAjectory
+  - TODO How is it structured?
+    - FETA
+    - PARM
+    - BRIE
+    - CUDAjectory
+      - Provides the actual environmental models, physical models, etc.
+      - Python module for easy usage
+      - TODO What else does CUDAjectory provide to the calculation?
+  - TODO What does it do?
+  - TODO Why does it do that?
+  - TODO How does it do that?
+  - TODO Why does it do that how it does it?
+
+- TODO Compare CUDAjectory performance with Godot performance to explain why CUDAjectory uses CUDA
+
+- Introduce what we're doing
+  - TODO What are we doing?
+  - TODO Why are we doing it?
+  - TODO What benefits do we think we'll gain after having done it?
 
