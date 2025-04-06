@@ -1,185 +1,203 @@
 \chapter{Introduction}
-Introduction - Why was the study undertaken? What was the research question, the tested hypothesis or the purpose of the research?
-This chapter introduces the evaluation and optimization of the CUDAjectory v2 Performance Architecture.
+% Brief explanation of what CUDAjectory does
+% 	What does CUDAjectory do?
+% 		software that is able to propagate the trajectories of many samples in parallel on a CUDA-capable GPU \cite{geda_massive_2019}
+% 	initially authored by GEDA as part of a masters thesis at the TU Delft
+The design and analysis of satellite orbits forms an integral part of every space project.
+This analysis requires fast, high fidelity, and accurate trajectory simulations for multiple samples.
+For some astrodynamic applications propagation times can be several thousands or millions of years and often involve large sample sizes.
+Running simulations this large on CPUs can take a significant amount of time.
+To this end, \citeauthor{geda_massive_2019} developed \cudaj in \citeyear{geda_massive_2019}\cite{geda_massive_2019}.
+\cudaj enables fast trajectory simulations of many samples in parallel on CUDA-capable GPUs.
+\cudaj was recently rewritten by researchers at the \esoc.
+We will refer to the previous version as \cudaj{1} and to the new rewritten version as \cudaj{2}.
 
+% What are we doing?
+% 	Analyzing the performance characteristics of the CUDAjectory v2
+% 		Pinpoint performance bottlenecks / suboptimal program behavior
+% 			By using profiling tools like NSight Compute / Systems
+% 		Determine why these performance bottlenecks occur
+% 	Improve performance of CUDAjectory v2 by fixing these performance bottlenecks
+% 	To this end we start out by introducing CUDA / MPP / performance analysis concepts before analyzing CUDAjectory v2
+% 	Then we walk through the changes made to the code and how they impacted performance
+% 	Finally, we present how the overall performance compares to the initial codebase
+For this work we intend to analyze the performance of \cudaj{2}, pinpoint performance bottlenecks and areas that can be improved.
+Then, we improve the program performance, utilizing the information gathered in the analysis.
 
-Overview of what we are doing and what we hope to achieve
-- Brief explanation of what CUDAjectory does
-	- What does CUDAjectory do?
-		- software that is able to propagate the trajectories of many samples in parallel on a CUDA-capable GPU \cite{geda_massive_2019}
-	- initially authored by GEDA as part of a masters thesis at the TU Delft
-- What are we doing?
-	- Analyzing the performance characteristics of the CUDAjectory v2
-		- Pinpoint performance bottlenecks / suboptimal program behavior
-			- By using profiling tools like NSight Compute / Systems
-		- Determine why these performance bottlenecks occur
-	- Improve performance of CUDAjectory v2 by fixing these performance bottlenecks
-	- To this end we start out by introducing CUDA / MPP / performance analysis concepts before analyzing CUDAjectory v2
-	- Then we walk through the changes made to the code and how they impacted performance
-	- Finally, we present how the overall performance compares to the initial codebase
-	- TODO Is there something else to discuss here?
-- What are we hoping to achieve?
-	- Improved performance of CUDAjectory v2 to enable larger-scale and faster trajectory computations
-- Why do we want to achieve it?
-	- CUDAjectory already represents a huge improvement in terms of speedup compared to traditional methods which use the CPU (Godot)
-	- CUDAjectory v2 also already surpasses the performance of its predecessor
-	- Our aim is to improve CUDAjectory v2 even further
-	- TODO does this actually answer WHY?
+In the following sections, we will introduce all the necessary concepts of \cuda programming, performance metrics, the tools with which they can be gathered and what they can tell us about a programs performance behavior.
+Then, we explore the structure of \cudaj{2} and how it functions.
 
-- Introduce CUDA / MPP
-	- What is it?
-		- acronym Compute Unified Device Architecture
-		- CUDA is a general purpose parallel computing platform, providing hardware and software component that allow developers to write and execute highly parallelized applications
-		- general-purpose parallel computing platform
-		- TODO include some figures, use them to explain
-			- software
-				- Kernels
-					- Special functions executed on the device by n threads on n cores
-					- when launching a kernel the dimensions of the grid and the dimensions of all blocks in that grid have to be specified
-					- additionally the size of shared memory per block and the streamId can be specified
-				- Threads
-					- smallest union of execution in a CUDA program
-					- each thread executes a single instance of a kernel function
-					- each thread has access to its own registers
-					- each thread has a unique identifier within a block, given by threadIdx, which is a 3d index
-				- Blocks
-					- a group of threads that can cooperate with each other
-					- threads in a block access the same shared memory and can synchronize their execution
-					- blocks are independent of each other
-						- each block has its own shared memory
-						- each block can be scheduled and executed independently of other blocks
-					- all blocks have the same dimensions
-						- i.e., all threads in a block execute on the same SM
-					- each block has a unique identifier within a grid, given by blockIdx, which is a 3d index
-				- Grids
-					- a collection of blocks
-					- provides the overall structure for organizing blocks
-				- Streams
-					- a queue of GPU operations that are executed in order
-					- multiple streams allow developers to schedule GPU operations concurrently
-					- streams are independent of each other, there is no implicit ordering between GPU operations on different streams
-			- hardware
-				- GPGPU (General Purpose Graphics Processing Unit) or more accurately MPP (Massively Parallel Processors)
-				- Unlike traditional CPUs, MPPs posses a larger number of less capable processing units that can execute code in parallel
-				- CUDA Core: the fundamental unit of execution
-					- (executes one instance of a kernel function)
-					- can execute instructions
-						- instructions are issued to multiple cores simultaneously
-					- is also less powerful / capable than a typical modern CPU core
-					- only has little memory to itself (registers)
-					- in return there can be many more CUDA cores in a GPU / an MPP than CPU cores in a CPU
-					- high-end server CPUs can have up to 192 cores
-						- AMD EPYC 9965 has 192 cores https://www.amd.com/de/products/processors/server/epyc/9005-series/amd-epyc-9965.html
-					- high-end server GPUs have (all \cite{elster_nvidia_2022})
-						- 144 SMs each with
-							- 128 fp32 cores
-							- 64 fp64 cores
-						- of course, these GPU cores are less powerful than CPU cores but when correctly programmed the large number of GPU cores can outperform the CPU cores
-				- Streaming Multiprocessors: CUDA cores are contained in Streaming Multiprocessors (SM) \cite{hwu_programming_2023}
-					- an MPP contains multiple SMs
-						- NVIDIA A100 has 108 SMs with 64 cores each \cite{hwu_programming_2023}
-						- NVIDIA H100 has 144 SMs \cite{elster_nvidia_2022}
-					- each SM has on-chip memory
-						- fast but small
-					- each SM has many CUDA cores
-					- also has additional memory
-						- hierarchy from smallest and fastest to largest and slowest
-						- register (file)
-							- r/w per-thread
-							- smallest and fastest
-						- local memory
-							- r/w per-thread
-							- located where shared memory is located
-							- this is where registers spill to
-						- shared memory
-							- r/w per-block
-					- control logic
-						- TODO find out more information about what is meant by "Control"
-					- during execution each block is assigned to one SM
-						- i.e., all threads in a block are assigned to one SM \cite{hwu_programming_2023}
-					- SM groups threads into warps for scheduling and execution
-				- Warps: fundamental unit of scheduling
-					- group of 32 threads within a block that are executed simultaneously
-					- all threads in a wap execute the same instruction in lockstep
-					- (most efficient when all threads in a warp execute the same instruction)
-				- Global Memory
-					- large but slow
-	- What does it do?
+% TODO write more about the performance analysis once I have written an actual analysis
+Using this information we then analyze the performance of \cudaj{2}.
+We pinpoint performance bottlenecks and areas where it can be improved.
 
-- Introduce performance metrics
-	- TODO What are they?
-	- TODO What do they tell us about the program?
-	- TODO How do we collect them?
+% TODO write more about improving the performance once I have actually improved the performance
+Following the results of the performance analysis, we make changes to the source code and show how those changes impact performance.
 
-- TODO Maintain a list of all the techniques that we use throughout the thesis
+Our goal is to improve overall performance by increasing efficient resource usage to enable larger-scale and faster trajectory simulations to aid in the design of space missions.
 
-- introduce CUDAjectory
-	- performs trajectory calculations
-		- take many samples
-		- Because the samples are independent of each other we can propagate each one in parallel
-		- Godot does this on the CPU
-		- CUDAjectory does this on the GPU
-	- TODO source: AMs PowerPoint presentation
-	- CUDAjectory v2 is a rewrite of CUDAjectory v1
-		- authored by scientist at European Space Operations Centre (ESOC)
-		- v1 was a successful prototype
-		- issues with CUDAjectory v1
-			- monolithic software
-				- limited maintainability
-				- difficult to extend
-			- little testing
-			- low robustness level on memory management
-			- cumbersome API
-		- rewrite with focus on maintainability, extensibility, UX, DX, and performance
-	- How is it structured? (v2)
-		- modular architecture
-			- TODO describe modular architecture of CUDAjectory v2
-			- Mapping function, Mapper, Mathematical model
-		- Fast Expression Template Algebra (FETA)
-			- implements vectors, arrays of vectors
-			- simplifies GPU programs by encapsulating most of its complexity
-			- TODO Is it similar to CuPy and cuBLAS? What are they?
-		- Parallel Algorithms for Real-time Mathematics (PARM)
-			- relies on FETA array and vector array types
-			- provides more advanced algorithms for scientific computing
-				- interpolation
-					- used by BRIE for ephemeris computation
-					- chebyshev polynomials
-				- root finding
-				- integration
-					- used by CUDAjectory
-					- numerical simulation schemes (e.g., Runge Kutta)
-				- statistics, actually not developed yet
-		- Body-Referenced Interplanetary Ephemeris (BRIE)
-			- relies on FETA array and vector array types
-			- simplifies ephemeris management
-			- rearranges SPICE data to be more efficient on GPUs
-			- works on CPUs and GPUs
-			- TODO explain what ephemeris and SPICE are? Maybe we can circumvent these explanations?
-		- CUDAjectory
-			- Provides
-				- the actual mathematical model
-				- physical models
-				- environmental models
-				- events
-				- interactions
-				- simulation samples / particles
-			- Python module for easy usage
-			- TODO What else does CUDAjectory provide to the calculation?
+% What are we hoping to achieve?
+% 	Improved performance of CUDAjectory v2 to enable larger-scale and faster trajectory computations
+% Why do we want to achieve it?
+% 	CUDAjectory already represents a huge improvement in terms of speedup compared to traditional methods which use the CPU (Godot)
+% 	CUDAjectory v2 also already surpasses the performance of its predecessor
+% 	Our aim is to improve CUDAjectory v2 even further
+% 	TODO does this actually answer WHY?
 
-- TODO Compare CUDAjectory performance with Godot performance to explain why CUDAjectory uses CUDA
+% Introduce CUDA / MPP
+% 	What is it?
+% 		acronym Compute Unified Device Architecture
+% 		CUDA is a general purpose parallel computing platform, providing hardware and software component that allow developers to write and execute highly parallelized applications
+% 		general-purpose parallel computing platform
+% 		TODO include some figures, use them to explain
+% 			software
+% 				Kernels
+% 					Special functions executed on the device by n threads on n cores
+% 					when launching a kernel the dimensions of the grid and the dimensions of all blocks in that grid have to be specified
+% 					additionally the size of shared memory per block and the streamId can be specified
+% 				Threads
+% 					smallest union of execution in a CUDA program
+% 					each thread executes a single instance of a kernel function
+% 					each thread has access to its own registers
+% 					each thread has a unique identifier within a block, given by threadIdx, which is a 3d index
+% 				Blocks
+% 					a group of threads that can cooperate with each other
+% 					threads in a block access the same shared memory and can synchronize their execution
+% 					blocks are independent of each other
+% 						each block has its own shared memory
+% 						each block can be scheduled and executed independently of other blocks
+% 					all blocks have the same dimensions
+% 						i.e., all threads in a block execute on the same SM
+% 					each block has a unique identifier within a grid, given by blockIdx, which is a 3d index
+% 				Grids
+% 					a collection of blocks
+% 					provides the overall structure for organizing blocks
+% 				Streams
+% 					a queue of GPU operations that are executed in order
+% 					multiple streams allow developers to schedule GPU operations concurrently
+% 					streams are independent of each other, there is no implicit ordering between GPU operations on different streams
+% 			hardware
+% 				GPGPU (General Purpose Graphics Processing Unit) or more accurately MPP (Massively Parallel Processors)
+% 				Unlike traditional CPUs, MPPs posses a larger number of less capable processing units that can execute code in parallel
+% 				CUDA Core: the fundamental unit of execution
+% 					(executes one instance of a kernel function)
+% 					can execute instructions
+% 						instructions are issued to multiple cores simultaneously
+% 					is also less powerful / capable than a typical modern CPU core
+% 					only has little memory to itself (registers)
+% 					in return there can be many more CUDA cores in a GPU / an MPP than CPU cores in a CPU
+% 					high-end server CPUs can have up to 192 cores
+% 						AMD EPYC 9965 has 192 cores https://www.amd.com/de/products/processors/server/epyc/9005-series/amd-epyc-9965.html
+% 					high-end server GPUs have (all \cite{elster_nvidia_2022})
+% 						144 SMs each with
+% 							128 fp32 cores
+% 							64 fp64 cores
+% 						of course, these GPU cores are less powerful than CPU cores but when correctly programmed the large number of GPU cores can outperform the CPU cores
+% 				Streaming Multiprocessors: CUDA cores are contained in Streaming Multiprocessors (SM) \cite{hwu_programming_2023}
+% 					an MPP contains multiple SMs
+% 						NVIDIA A100 has 108 SMs with 64 cores each \cite{hwu_programming_2023}
+% 						NVIDIA H100 has 144 SMs \cite{elster_nvidia_2022}
+% 					each SM has on-chip memory
+% 						fast but small
+% 					each SM has many CUDA cores
+% 					also has additional memory
+% 						hierarchy from smallest and fastest to largest and slowest
+% 						register (file)
+% 							r/w per-thread
+% 							smallest and fastest
+% 						local memory
+% 							r/w per-thread
+% 							located where shared memory is located
+% 							this is where registers spill to
+% 						shared memory
+% 							r/w per-block
+% 					control logic
+% 						TODO find out more information about what is meant by "Control"
+% 					during execution each block is assigned to one SM
+% 						i.e., all threads in a block are assigned to one SM \cite{hwu_programming_2023}
+% 					SM groups threads into warps for scheduling and execution
+% 				Warps: fundamental unit of scheduling
+% 					group of 32 threads within a block that are executed simultaneously
+% 					all threads in a wap execute the same instruction in lockstep
+% 					(most efficient when all threads in a warp execute the same instruction)
+% 				Global Memory
+% 					large but slow
+% 	What does it do?
 
-- Introduce what we're doing
-	- TODO What are we doing?
-		- performance analysis of CUDAjectory v2
-		- performance improvement based on aforementioned analysis
-		- show with further performance analysis that our changes actually improved performance
-	- TODO Why are we doing it?
-		- mission analysis is a crucial aspect of mission design
-			- it influences all aspects of mission design
-		- especially for large-scale simulations with long propagation times
-			- these are used in 
-	- TODO What benefits do we think we'll gain after having done it?
-		- improved performance in trajectory calculations enable larger-scale simulations to be completed in less time
-		- enables Mission Analysis to iterate faster with higher quality data to ensure successful missions?
-		- TODO compose some sentences about how this enables better space missions
+% Introduce performance metrics
+% 	TODO What are they?
+% 	TODO What do they tell us about the program?
+% 	TODO How do we collect them?
+
+% TODO Maintain a list of all the performance improvement techniques that we use throughout the thesis
+
+% introduce CUDAjectory
+% 	performs trajectory calculations
+% 		take many samples
+% 		Because the samples are independent of each other we can propagate each one in parallel
+% 		Godot does this on the CPU
+% 		CUDAjectory does this on the GPU
+% 	TODO source: AMs PowerPoint presentation
+% 	CUDAjectory v2 is a rewrite of CUDAjectory v1
+% 		authored by scientist at European Space Operations Centre (ESOC)
+% 		v1 was a successful prototype
+% 		issues with CUDAjectory v1
+% 			monolithic software
+% 				limited maintainability
+% 				difficult to extend
+% 			little testing
+% 			low robustness level on memory management
+% 			cumbersome API
+% 		rewrite with focus on maintainability, extensibility, UX, DX, and performance
+% 	How is it structured? (v2)
+% 		modular architecture
+% 			TODO describe modular architecture of CUDAjectory v2
+% 			Mapping function, Mapper, Mathematical model
+% 		Fast Expression Template Algebra (FETA)
+% 			implements vectors, arrays of vectors
+% 			simplifies GPU programs by encapsulating most of its complexity
+% 			TODO Is it similar to CuPy and cuBLAS? What are they?
+% 		Parallel Algorithms for Real-time Mathematics (PARM)
+% 			relies on FETA array and vector array types
+% 			provides more advanced algorithms for scientific computing
+% 				interpolation
+% 					used by BRIE for ephemeris computation
+% 					chebyshev polynomials
+% 				root finding
+% 				integration
+% 					used by CUDAjectory
+% 					numerical simulation schemes (e.g., Runge Kutta)
+% 				statistics, actually not developed yet
+% 		Body-Referenced Interplanetary Ephemeris (BRIE)
+% 			relies on FETA array and vector array types
+% 			simplifies ephemeris management
+% 			rearranges SPICE data to be more efficient on GPUs
+% 			works on CPUs and GPUs
+% 			TODO explain what ephemeris and SPICE are? Maybe we can circumvent these explanations?
+% 		CUDAjectory
+% 			Provides
+% 				the actual mathematical model
+% 				physical models
+% 				environmental models
+% 				events
+% 				interactions
+% 				simulation samples / particles
+% 			Python module for easy usage
+% 			TODO What else does CUDAjectory provide to the calculation?
+
+% TODO Compare CUDAjectory performance with Godot performance to explain why CUDAjectory uses CUDA
+
+% Introduce what we're doing
+% 	TODO What are we doing?
+% 		performance analysis of CUDAjectory v2
+% 		performance improvement based on aforementioned analysis
+% 		show with further performance analysis that our changes actually improved performance
+% 	TODO Why are we doing it?
+% 		mission analysis is a crucial aspect of mission design
+% 			it influences all aspects of mission design
+% 		especially for large-scale simulations with long propagation times
+% 			these are used in 
+% 	TODO What benefits do we think we'll gain after having done it?
+% 		improved performance in trajectory calculations enable larger-scale simulations to be completed in less time
+% 		enables Mission Analysis to iterate faster with higher quality data to ensure successful missions?
+% 		TODO compose some sentences about how this enables better space missions
