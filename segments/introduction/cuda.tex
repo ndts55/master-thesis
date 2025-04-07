@@ -1,0 +1,78 @@
+\section{\cuda}
+% TODO include some figures, use them to explain
+The Compute Unified Device Architecture (\cuda) is a general-purpose parallel computing platform, providing hardware and sofware components that allow developers to write and execute highly parallelized applications.
+Unlike traditional \cpu{s}, \cuda devices posses a larger number of processing units that can execute code in parallel.
+Admittedly, the processing units in a \cuda device are typically less powerful than modern \cpu{} cores but certain workloads benefit hugely from the ability to perform a large number of calculations in parallel.
+
+In this section we briefly introduce relevant concepts of \cuda that enable massively parallel program execution.
+
+\subsection{Programming Model}
+In \cuda, developers organize parallel code execution with grids and blocks.
+These are used to organize threads, which execute kernels on \cuda devices.
+
+A grid is a collection of blocks.
+It provides the overall structure for organizing blocks.
+
+Each block has a unique identifier within a grid, given by \texttt{blockIdx}, which is a 3D-index\cite{hwu_programming_2023}.
+Threads within a block can synchronize their execution and access the same shared memory.
+
+Each thread has a unique identifier within a block, given by \texttt{threadIdx}, which is a 3D-index\cite{hwu_programming_2023}.
+One thread executes a single instance of a kernel function.
+
+Kernels are special functions that are executed on \cuda devices.
+Within a kernel, developers have access to the thread index, the block index, the block dimensions, and the grid dimensions.
+Kernels can be launched from the host on the device.
+When launching a kernel, the grid dimensions and the block dimensions have to be specified\cite{hwu_programming_2023}.
+
+% TODO introduce execution ordering with streams, graphs, events
+
+% Streams
+% 	  a queue of GPU operations that are executed in order
+% 	  multiple streams allow developers to schedule GPU operations concurrently
+% 	  streams are independent of each other, there is no implicit ordering between GPU operations on different streams
+
+% kernel in the same stream are executed in the order they are launched
+% there is no implicit ordering between GPU operations on different streams
+% explicit ordering is possible through the use of events (maybe out of scope)
+
+\subsection{Compute \& Memory Resources}
+% TODO recreate figure from hwu_programming_2023 figure 4.1
+\cuda devices are organized into an array of Streaming Multiprocessors (\sm)\cite{hwu_programming_2023}.
+A modern \cuda device, such as the \nvidia H100, has up to 144 \sms\cite{elster_nvidia_2022}.
+Each \sm has multiple processing units called \cuda cores that share control logic and on-chip memory resources.
+% TODO find source for how many cuda cores each sm in an h100 has
+% TODO find out more information about what is meant by "Control"
+
+The memory resources are comprised of a register file, local memory, and shared memory.
+
+The register file contains the registers that can only be accessed by the owning thread.
+To access the data in a register no memory operations are necessary, thus providing fast low-latency memory to each executing thread.
+Should a thread require too many registers the data spills into local memory, which does require memory operations to access, thus decreasing performance.
+
+Shared memory can be accessed by all threads in a block and require memory operations to read from and write to it.
+It is meant to store shared data for multiple threads and designed to handle multiple memory accesses simultaneously.
+This is achieved by spreading the memory addresses across memory-banks, each of which can serve one access per cycle.
+
+All \sms are connected to global memory, which resides in on-device DRAM.
+It tends to have long access latency but provides the largest amount of memory.
+
+\subsection{Execution of a CUDA program}
+% TODO memory op coalescing
+% TODO memory access through L1 to L2?
+
+To launch a kernel the developer has to specify the grid and block dimensions.
+Additionally, the size of shared memory per block and the stream identifier can be given\cite{hwu_programming_2023}.
+
+During kernel execution each block is assigned to one \sm.
+This enables threads within the same block to synchronize their execution and access the same shared memory.
+The shared memory of each block resides entirely in the on-chip memory the \sm provides\cite{hwu_programming_2023}.
+
+For execution, the \sm schedules warps of threads from a block, which are groups of 32 threads and represent the fundamental unit of scheduling in \cuda.
+Each thread is executed on one \cuda core.
+Threads in the same warp are issued the same instructions, to be executed in lockstep.
+This is most efficient, when all threads execute the same instruction, \ie they follow the same control flow path.
+Otherwise, the warp has divergence, meaning that some threads in a wapr are idle because they followed a different control flow path\cite{hwu_programming_2023}.
+
+Ideally, most, if not all, cores in an \sm are occupied executing threads.
+This is only possible when the resources an \sm can provide, such as registers, shared and local memory, and cores, is sufficient for all scheduled threads.
+If that is not the case, \eg the number of registers a thread uses or the amount of shared memory a thread requires is too high, the \sm can not occupy all cores which remain unused\cite{hwu_programming_2023}.

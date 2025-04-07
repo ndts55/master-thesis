@@ -8,7 +8,7 @@ This analysis requires fast, high fidelity, and accurate trajectory simulations 
 For some astrodynamic applications propagation times can be several thousands or millions of years and often involve large sample sizes.
 Running simulations this large on CPUs can take a significant amount of time.
 To this end, \citeauthor{geda_massive_2019} developed \cudaj in \citeyear{geda_massive_2019}\cite{geda_massive_2019}.
-\cudaj enables fast trajectory simulations of many samples in parallel on CUDA-capable GPUs.
+\cudaj enables fast trajectory simulations of many samples in parallel on a CUDA-capable GPU.
 \cudaj was recently rewritten by researchers at the \esoc.
 We will refer to the previous version as \cudaj{1} and to the new rewritten version as \cudaj{2}.
 
@@ -44,85 +44,7 @@ Our goal is to improve overall performance by increasing efficient resource usag
 % 	Our aim is to improve CUDAjectory v2 even further
 % 	TODO does this actually answer WHY?
 
-% Introduce CUDA / MPP
-% 	What is it?
-% 		acronym Compute Unified Device Architecture
-% 		CUDA is a general purpose parallel computing platform, providing hardware and software component that allow developers to write and execute highly parallelized applications
-% 		general-purpose parallel computing platform
-% 		TODO include some figures, use them to explain
-% 			software
-% 				Kernels
-% 					Special functions executed on the device by n threads on n cores
-% 					when launching a kernel the dimensions of the grid and the dimensions of all blocks in that grid have to be specified
-% 					additionally the size of shared memory per block and the streamId can be specified
-% 				Threads
-% 					smallest union of execution in a CUDA program
-% 					each thread executes a single instance of a kernel function
-% 					each thread has access to its own registers
-% 					each thread has a unique identifier within a block, given by threadIdx, which is a 3d index
-% 				Blocks
-% 					a group of threads that can cooperate with each other
-% 					threads in a block access the same shared memory and can synchronize their execution
-% 					blocks are independent of each other
-% 						each block has its own shared memory
-% 						each block can be scheduled and executed independently of other blocks
-% 					all blocks have the same dimensions
-% 						i.e., all threads in a block execute on the same SM
-% 					each block has a unique identifier within a grid, given by blockIdx, which is a 3d index
-% 				Grids
-% 					a collection of blocks
-% 					provides the overall structure for organizing blocks
-% 				Streams
-% 					a queue of GPU operations that are executed in order
-% 					multiple streams allow developers to schedule GPU operations concurrently
-% 					streams are independent of each other, there is no implicit ordering between GPU operations on different streams
-% 			hardware
-% 				GPGPU (General Purpose Graphics Processing Unit) or more accurately MPP (Massively Parallel Processors)
-% 				Unlike traditional CPUs, MPPs posses a larger number of less capable processing units that can execute code in parallel
-% 				CUDA Core: the fundamental unit of execution
-% 					(executes one instance of a kernel function)
-% 					can execute instructions
-% 						instructions are issued to multiple cores simultaneously
-% 					is also less powerful / capable than a typical modern CPU core
-% 					only has little memory to itself (registers)
-% 					in return there can be many more CUDA cores in a GPU / an MPP than CPU cores in a CPU
-% 					high-end server CPUs can have up to 192 cores
-% 						AMD EPYC 9965 has 192 cores https://www.amd.com/de/products/processors/server/epyc/9005-series/amd-epyc-9965.html
-% 					high-end server GPUs have (all \cite{elster_nvidia_2022})
-% 						144 SMs each with
-% 							128 fp32 cores
-% 							64 fp64 cores
-% 						of course, these GPU cores are less powerful than CPU cores but when correctly programmed the large number of GPU cores can outperform the CPU cores
-% 				Streaming Multiprocessors: CUDA cores are contained in Streaming Multiprocessors (SM) \cite{hwu_programming_2023}
-% 					an MPP contains multiple SMs
-% 						NVIDIA A100 has 108 SMs with 64 cores each \cite{hwu_programming_2023}
-% 						NVIDIA H100 has 144 SMs \cite{elster_nvidia_2022}
-% 					each SM has on-chip memory
-% 						fast but small
-% 					each SM has many CUDA cores
-% 					also has additional memory
-% 						hierarchy from smallest and fastest to largest and slowest
-% 						register (file)
-% 							r/w per-thread
-% 							smallest and fastest
-% 						local memory
-% 							r/w per-thread
-% 							located where shared memory is located
-% 							this is where registers spill to
-% 						shared memory
-% 							r/w per-block
-% 					control logic
-% 						TODO find out more information about what is meant by "Control"
-% 					during execution each block is assigned to one SM
-% 						i.e., all threads in a block are assigned to one SM \cite{hwu_programming_2023}
-% 					SM groups threads into warps for scheduling and execution
-% 				Warps: fundamental unit of scheduling
-% 					group of 32 threads within a block that are executed simultaneously
-% 					all threads in a wap execute the same instruction in lockstep
-% 					(most efficient when all threads in a warp execute the same instruction)
-% 				Global Memory
-% 					large but slow
-% 	What does it do?
+\input{segments/introduction/cuda}
 
 % Introduce performance metrics
 % 	TODO What are they?
@@ -137,7 +59,7 @@ Our goal is to improve overall performance by increasing efficient resource usag
 % 		Because the samples are independent of each other we can propagate each one in parallel
 % 		Godot does this on the CPU
 % 		CUDAjectory does this on the GPU
-% 	TODO source: AMs PowerPoint presentation
+% TODO indirect speec for claims about how bad CUDAjectory v1 is
 % 	CUDAjectory v2 is a rewrite of CUDAjectory v1
 % 		authored by scientist at European Space Operations Centre (ESOC)
 % 		v1 was a successful prototype

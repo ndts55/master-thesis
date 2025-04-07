@@ -30,8 +30,10 @@ signature.png
 .pdf
 
 ## Bibliography auxiliary files (bibtex/biblatex/biber):
+*.bbl-SAVE-ERROR
 *.bbl
 *.bcf
+*.bcf-SAVE-ERROR
 *.blg
 *-blx.aux
 *-blx.bib
